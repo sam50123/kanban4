@@ -1,3 +1,8 @@
 .playwright-mcp/
 .DS_Store
 *.pages
+
+# Agent reports (may contain findings and traffic data; keep out of the public repo)
+security-reports/
+login-reports/
+visitor-reports/

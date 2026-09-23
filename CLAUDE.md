@@ -22,13 +22,15 @@ There is no build, no package manager and no test suite. Open `index.html` direc
 
 ## Architecture (inside `<script>`)
 
-- **Single source of truth**: `state = { tasks, filters, pendingDeleteId }`. The UI is always re-rendered from state. Don't mutate card DOM outside `renderBoard()`.
+- **Single source of truth**: `state = { tasks, filters, pendingDeleteId, auth, loginLog }`. The UI is always re-rendered from state. Don't mutate card DOM outside `renderBoard()`.
 - **Render path**: `renderBoard()` builds all four columns via `applyFilters()` and `renderCard()` using HTML strings, then calls `renderSummary()`. Column count badges reflect the *filtered* view, while the header summary reflects *all* tasks. Every user-supplied string must pass through `escapeHtml()`.
 - **Mutations**: `addTask()`, `moveTask()` and `deleteTask()` update `state` and then call `renderBoard()`. Because a re-render replaces the DOM, callers restore keyboard focus with `focusAfterRender()`.
 - **Events** are delegated once on `#board` (dragstart/dragover/dragleave/drop/dragend, `change` for the "Move ▸" select, `click` for delete actions, and Escape to cancel a delete). Don't attach listeners to individual cards.
 - **Task IDs** are `UOB-ITPM-####` from the `nextIdNumber` counter. The seed data uses IDs 1–8, and seed due dates are relative to today (`addDays()`) so the overdue badges always show.
 - **Dates** are local-date ISO strings (`todayISO()`/`toISODate()`, not UTC) compared as strings. `isOverdue` = due date is before today and status ≠ Done.
 - **Add Task flow** (`handleSubmit`): `validateForm()` → `addTask()` (optimistic) → reset form → success toast → `notifyNewTask()` in try/catch with the button in a "Sending…" state. On failure the card stays and a warning toast appears. The modal stays open after submit.
+
+- **Demo sign-in gate** (section before Init): a client-side-only login overlay (`#login-backdrop`) shown on load and after sign-out. It is *not* real authentication: `DEMO_USERS` credentials are public in the file and shown on screen. While signed out, `.app-header` and `main` are `inert`. 5 failures (`LOGIN_MAX_FAILURES`) pause sign-in for `LOGIN_LOCKOUT_MS`. Every attempt is appended to `state.loginLog` as `{ time, username, outcome }` (never the password); the `login-monitor` agent reads it. A refresh signs out (no persistence).
 
 ## FormSubmit
 

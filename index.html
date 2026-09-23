@@ -347,6 +347,30 @@ main { padding: var(--space-5); }
 /* Support popup (reuses .modal-backdrop / .modal) */
 .support-modal { max-width: 420px; }
 .support-modal p { margin: 0 0 var(--space-3); line-height: 1.5; }
+
+/* Demo sign-in gate (reuses .modal-backdrop / .modal / .form-field) */
+.login-modal { max-width: 400px; }
+.login-modal .form-field { margin-bottom: var(--space-3); }
+.login-hint {
+  margin: 0 0 var(--space-4);
+  padding-left: var(--space-3);
+  border-left: 3px solid var(--c-focus);
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--c-text-muted);
+}
+.session-bar { margin: var(--space-1) 0 0; font-size: 12px; }
+.session-bar[hidden] { display: none; }
+.session-bar button {
+  margin-left: var(--space-2);
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
 .support-hotline { font-size: 20px; font-weight: 700; color: var(--c-primary); }
 
 /* ==========================================================================
@@ -402,7 +426,8 @@ main { padding: var(--space-5); }
 <header class="app-header">
   <div>
     <h1 class="wordmark">UOB IT PMO <span>· Kanban</span></h1>
-    <p class="demo-note">Demo mode: tasks are kept in memory only, so refreshing the page resets the board to its sample data.</p>
+    <p class="demo-note">Demo mode: tasks are kept in memory only, so refreshing the page resets the board to its sample data and signs you out.</p>
+    <p class="session-bar" id="session-bar" hidden>Signed in as <strong id="session-user"></strong><button type="button" id="sign-out">Sign out</button></p>
   </div>
   <ul class="summary" id="summary" aria-label="Board summary"></ul>
   <button type="button" class="btn btn-accent" id="open-add-task">+ Add Task</button>
@@ -517,6 +542,33 @@ main { padding: var(--space-5); }
   </div>
 </div>
 
+<!-- ========================================================================
+     Demo sign-in gate: shown on load and after signing out. Client-side only,
+     so it is NOT real authentication (see the sign-in section of the script).
+     ======================================================================== -->
+<div class="modal-backdrop" id="login-backdrop">
+  <div class="modal login-modal" role="dialog" aria-modal="true" aria-labelledby="login-title" aria-describedby="login-hint">
+    <div class="modal-header">
+      <h2 id="login-title">Sign in to the demo board</h2>
+    </div>
+    <p class="login-hint" id="login-hint">Demo sign-in only: nothing is checked by a server, so never enter a real password. Use <strong>pmo.demo</strong> / <strong>Demo@123</strong> or <strong>pmo.viewer</strong> / <strong>View@123</strong>.</p>
+    <form id="login-form" novalidate>
+      <div class="form-field">
+        <label for="login-username">Username</label>
+        <input type="text" id="login-username" name="username" maxlength="40" autocomplete="off" spellcheck="false">
+      </div>
+      <div class="form-field">
+        <label for="login-password">Password</label>
+        <input type="password" id="login-password" name="password" maxlength="64" autocomplete="off">
+      </div>
+      <p class="field-error" id="login-error" role="alert"></p>
+      <div class="form-actions">
+        <button type="submit" class="btn btn-primary" id="login-submit">Sign in</button>
+      </div>
+    </form>
+  </div>
+</div>
+
 <!-- Toast region (announced politely to screen readers) -->
 <div class="toasts" id="toasts" aria-live="polite" aria-atomic="false"></div>
 
@@ -572,6 +624,8 @@ const state = {
   tasks: [],
   filters: { project: "", assignee: "", priority: "" },
   pendingDeleteId: null, // card currently showing the inline "Delete? Yes / No"
+  auth: { user: null, failures: 0, lockedUntil: 0 }, // demo sign-in, in memory only
+  loginLog: [], // sign-in events this page load: { time, username, outcome }, never the password
 };
 let nextIdNumber = 1;
 let sendingCount = 0;
@@ -1103,9 +1157,108 @@ function wireSupportEvents() {
   });
 
   setTimeout(() => {
-    if (modalBackdrop.hidden) openSupport();
+    if (modalBackdrop.hidden && loginBackdrop.hidden) openSupport();
     else supportPending = true;
   }, SUPPORT_DELAY_MS);
+}
+
+/* ==========================================================================
+   Demo sign-in gate. Client-side only: the credentials are public in this
+   file and no server checks them, so this is NOT real authentication.
+   Every attempt is recorded in state.loginLog (time, username, outcome;
+   never the password) for the login-monitor agent to read.
+   ========================================================================== */
+const DEMO_USERS = { "pmo.demo": "Demo@123", "pmo.viewer": "View@123" };
+const LOGIN_MAX_FAILURES = 5;
+const LOGIN_LOCKOUT_MS = 30000;
+const LOGIN_LOG_LIMIT = 200;
+const loginBackdrop = document.getElementById("login-backdrop");
+const loginForm = document.getElementById("login-form");
+const loginError = document.getElementById("login-error");
+
+function recordLogin(username, outcome) {
+  state.loginLog.push({ time: new Date().toISOString(), username: username || "(blank)", outcome });
+  if (state.loginLog.length > LOGIN_LOG_LIMIT) state.loginLog.shift();
+}
+
+// Locks or unlocks the board: while signed out, the header and board are inert
+function setSignedIn(user) {
+  state.auth.user = user;
+  const signedIn = Boolean(user);
+  document.querySelector(".app-header").inert = !signedIn;
+  document.querySelector("main").inert = !signedIn;
+  loginBackdrop.hidden = signedIn;
+  document.getElementById("session-bar").hidden = !signedIn;
+  document.getElementById("session-user").textContent = user || "";
+}
+
+function handleLogin(event) {
+  event.preventDefault();
+  const username = loginForm.elements.username.value.trim().toLowerCase();
+  const password = loginForm.elements.password.value;
+  const now = Date.now();
+
+  if (now < state.auth.lockedUntil) {
+    recordLogin(username, "blocked_locked_out");
+    loginError.textContent = `Too many failed attempts. Try again in ${Math.ceil((state.auth.lockedUntil - now) / 1000)}s.`;
+    return;
+  }
+  if (!username || !password) {
+    recordLogin(username, "missing_fields");
+    loginError.textContent = "Enter your username and password.";
+    (username ? loginForm.elements.password : loginForm.elements.username).focus();
+    return;
+  }
+  if (!Object.hasOwn(DEMO_USERS, username) || DEMO_USERS[username] !== password) {
+    state.auth.failures += 1;
+    recordLogin(username, "invalid_credentials");
+    if (state.auth.failures >= LOGIN_MAX_FAILURES) {
+      state.auth.failures = 0;
+      state.auth.lockedUntil = now + LOGIN_LOCKOUT_MS;
+      recordLogin(username, "lockout_started");
+      loginError.textContent = `Too many failed attempts. Sign-in is paused for ${LOGIN_LOCKOUT_MS / 1000}s.`;
+    } else {
+      loginError.textContent = "Incorrect username or password.";
+    }
+    loginForm.elements.password.value = "";
+    loginForm.elements.password.focus();
+    return;
+  }
+
+  state.auth.failures = 0;
+  recordLogin(username, "success");
+  loginForm.reset();
+  loginError.textContent = "";
+  setSignedIn(username);
+  showToast(`Signed in as ${username}.`, "success", 2500);
+  document.getElementById("open-add-task").focus();
+  if (supportPending) openSupport();
+}
+
+function signOut() {
+  recordLogin(state.auth.user, "logout");
+  modalBackdrop.hidden = true;
+  supportBackdrop.hidden = true;
+  setSignedIn(null);
+  loginForm.elements.username.focus();
+}
+
+function wireLoginEvents() {
+  loginForm.addEventListener("submit", handleLogin);
+  document.getElementById("sign-out").addEventListener("click", signOut);
+
+  // Tab is trapped inside the dialog; Escape does nothing because the board stays locked
+  loginBackdrop.addEventListener("keydown", (e) => {
+    if (e.key !== "Tab") return;
+    const focusables = [...loginBackdrop.querySelectorAll("input, button")];
+    const first = focusables[0];
+    const last = focusables[focusables.length - 1];
+    if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+  });
+
+  setSignedIn(null);
+  loginForm.elements.username.focus();
 }
 
 /* ==========================================================================
@@ -1118,6 +1271,7 @@ function init() {
   wireFilterEvents();
   wireModalEvents();
   wireSupportEvents();
+  wireLoginEvents();
   renderBoard();
 }
 
