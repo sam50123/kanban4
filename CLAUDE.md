@@ -33,3 +33,7 @@ There is no build, no package manager and no test suite. Open `index.html` direc
 - To change the recipient email, edit `FORMSUBMIT_ENDPOINT` at the top of the script; it's the only place the address appears.
 - While the placeholder `YOUR_EMAIL@example.com` is set, `notifyNewTask()` throws before sending any request, so every add shows the "email notification failed" warning.
 - A new address needs one-time activation: the first submission sends a confirmation email, and nothing is delivered until its link is clicked.
+
+## Deployment
+
+`.github/workflows/pages.yml` publishes `index.html` (only) to GitHub Pages on every push to `main`. The repo's Pages source must be set to "GitHub Actions". If you add files the site needs, copy them into `_site` in the workflow's "Assemble site" step.
