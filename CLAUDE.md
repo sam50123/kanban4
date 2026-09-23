@@ -6,6 +6,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 A single-file internal demo/training Kanban board for "UOB IT PMO" (`index.html`). It is not an official UOB system: use a neutral text wordmark and a corporate blue palette only. No real logos, trademarks or imitation of official systems.
 
+There are two standalone versions of the board, each a complete single file with the same script architecture: `index.html` (the original design) and `redesign.html` (a redesign with a light header, a status donut showing % complete, and restyled columns and cards). Changes to board behaviour usually need to be made in both.
+
 ## Running
 
 There is no build, no package manager and no test suite. Open `index.html` directly in a browser (double-click / `file://`); no server is required. To verify changes, load the page in the browser pane and exercise it with the JS console (e.g. inspect `state.tasks`, dispatch `change` on a `.move-select`, dispatch `DragEvent`s on `.card`/`.column`).
@@ -36,4 +38,4 @@ There is no build, no package manager and no test suite. Open `index.html` direc
 
 ## Deployment
 
-`.github/workflows/pages.yml` publishes `index.html` (only) to GitHub Pages on every push to `main`. The repo's Pages source must be set to "GitHub Actions". If you add files the site needs, copy them into `_site` in the workflow's "Assemble site" step.
+`.github/workflows/pages.yml` publishes `index.html` and `redesign.html` (only) to GitHub Pages on every push to `main`. The repo's Pages source must be set to "GitHub Actions". If you add files the site needs, copy them into `_site` in the workflow's "Assemble site" step.
