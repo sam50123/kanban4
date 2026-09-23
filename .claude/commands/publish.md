@@ -1,12 +1,12 @@
 ---
 description: Security-scan, document and publish this project to a GitHub repo with a GitHub Pages site
 argument-hint: <owner/repo | GitHub URL> [branch]
-allowed-tools: Bash(git:*), Bash(gh:*), Bash(grep:*), Bash(find:*), Bash(ls:*), Bash(cat:*), Bash(du:*), Bash(file:*), Bash(gitleaks:*), Read, Edit, Write
+allowed-tools: Bash(git:*), Bash(gh:*), Bash(grep:*), Bash(find:*), Bash(ls:*), Bash(cat:*), Bash(du:*), Bash(file:*), Bash(gitleaks:*), Read, Edit, Write, mcp__playwright__browser_navigate, mcp__playwright__browser_resize, mcp__playwright__browser_take_screenshot, mcp__playwright__browser_close
 ---
 
 # Publish to GitHub
 
-Publish this project to GitHub: README, repo "About" section, a GitHub Pages deploy via GitHub Actions and a security scan that **must pass before anything is pushed**.
+Publish this project to GitHub: README with a screenshot, repo "About" section, a GitHub Pages deploy via GitHub Actions and a security scan that **must pass before anything is pushed**.
 
 Arguments: `$ARGUMENTS`
 
@@ -41,6 +41,25 @@ Read `CLAUDE.md` and the project files so the README is accurate. Create or upda
 - Project structure and a short "Security notes" section (no persistence, escaped input, the only external endpoint).
 
 Keep any correct content that is already there. Don't invent features. Show the user a summary of what changed.
+
+## 2a. Screenshot for the README
+
+Use the **Playwright MCP server** (configured in `.mcp.json`) to capture the site and embed it in the README.
+
+1. Pick the page to capture:
+   - If the live Pages site (`https://OWNER.github.io/REPO/`) is up and shows the current version, use it.
+   - Otherwise (first publish, or the site is out of date) use the local file `file://<absolute path>/index.html`. If Playwright refuses `file://`, say so and use the live site, noting that the screenshot may be one deploy behind.
+2. Call `browser_resize` with width 1440 and height 900, then `browser_navigate` to the page.
+3. Call `browser_take_screenshot` with `filename: "docs/screenshot.png"`, `scale: "css"` (viewport only, not full page), then `browser_close`.
+4. Open `docs/screenshot.png` and check it: the board, the four columns and the sample cards have rendered, and no error, blank page or Pages 404 is showing. If it looks wrong, fix the cause and retake it. Don't commit a broken image.
+5. Make sure `README.md` embeds it just below the **Live demo** link, with descriptive alt text:
+   `![Screenshot of the Kanban board showing the Backlog, In Progress, Blocked and Done columns with sample tasks](docs/screenshot.png)`
+   Add `docs/screenshot.png` to the Project structure section if it isn't listed.
+6. Make sure `.gitignore` contains `.playwright-mcp/` so Playwright's snapshots and logs are never committed.
+
+The screenshot is only for the README. **Don't** add it to the "Assemble site" step in `pages.yml`, because the Pages site doesn't need it.
+
+The security scan in step 4 covers `docs/screenshot.png` too. Look at the image for anything that shouldn't be public (a real email address, personal data, other browser tabs).
 
 ## 3. GitHub Pages workflow
 
@@ -82,7 +101,7 @@ Report the findings as a table: **Severity (High / Medium / Low) · File:line ·
 
 - Show `git status` and `git diff --stat`, and propose a commit message.
 - **Ask the user to confirm** before committing and pushing. Pushing publishes the code to the internet.
-- After a clear yes: stage the specific files by name (not `git add -A`), commit, then run `git push -u origin BRANCH`. Never force-push unless the user asks for it explicitly.
+- After a clear yes: stage the specific files by name (not `git add -A`; include `docs/screenshot.png`, `.gitignore` and `.mcp.json` if they changed), commit, then run `git push -u origin BRANCH`. Never force-push unless the user asks for it explicitly.
 
 ## 6. Repo "About" section
 
@@ -106,6 +125,6 @@ End with a short summary:
 
 - Repo URL and branch pushed (commit SHA)
 - Security scan result (passed, or what was fixed or accepted)
-- README changes and About section values
+- README changes (including whether the screenshot was taken from the live or local site) and About section values
 - Pages workflow status and the **live URL**
 - Anything the user still needs to do by hand (e.g. rotate a secret, activate the FormSubmit email, set the Pages source)

@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "playwright": {
+      "type": "stdio",
+      "command": "/Users/mandylim/.local/node/bin/npx",
+      "args": ["-y", "@playwright/mcp@latest"],
+      "env": {
+        "PATH": "/Users/mandylim/.local/node/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+      }
+    }
+  }
+}

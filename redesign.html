@@ -414,6 +414,11 @@ main {
 .char-count { font-size: 12px; color: var(--c-text-muted); align-self: flex-end; font-variant-numeric: tabular-nums; }
 .form-actions { display: flex; justify-content: flex-end; gap: var(--space-2); margin-top: var(--space-4); }
 
+/* Support popup (reuses .modal-backdrop / .modal) */
+.support-modal { max-width: 420px; }
+.support-modal p { margin: 0 0 var(--space-3); line-height: 1.5; }
+.support-hotline { font-size: 20px; font-weight: 700; color: var(--c-blue); }
+
 /* ==========================================================================
    Toasts
    ========================================================================== */
@@ -594,6 +599,26 @@ main {
         <button type="submit" class="btn btn-primary" id="submit-task">Add task</button>
       </div>
     </form>
+  </div>
+</div>
+
+<!-- ========================================================================
+     Support popup: shown once per page load after SUPPORT_DELAY_MS
+     ======================================================================== -->
+<div class="modal-backdrop" id="support-backdrop" hidden>
+  <div class="modal support-modal" role="dialog" aria-modal="true" aria-labelledby="support-title" aria-describedby="support-body">
+    <div class="modal-header">
+      <h2 id="support-title">Thanks for visiting</h2>
+      <button type="button" class="icon-btn" id="support-x" aria-label="Close support dialog">×</button>
+    </div>
+    <div id="support-body">
+      <p>Thank you for visiting the UOB IT PMO portal.</p>
+      <p>If you need further assistance, please call the IT Support Hotline:<br>
+        <a class="support-hotline" href="tel:12345678">12345678</a></p>
+    </div>
+    <div class="form-actions">
+      <button type="button" class="btn btn-primary" id="support-close">Close</button>
+    </div>
   </div>
 </div>
 
@@ -1016,6 +1041,7 @@ function openModal() {
 function closeModal() {
   modalBackdrop.hidden = true;
   if (lastFocusBeforeModal) lastFocusBeforeModal.focus();
+  if (supportPending) openSupport();
 }
 
 async function handleSubmit(event) {
@@ -1185,6 +1211,49 @@ function wireModalEvents() {
 }
 
 /* ==========================================================================
+   Support popup: appears once after the visitor has stayed SUPPORT_DELAY_MS.
+   If the Add Task modal is open at that moment, it waits until it closes.
+   ========================================================================== */
+const SUPPORT_DELAY_MS = 10000;
+const supportBackdrop = document.getElementById("support-backdrop");
+let supportPending = false;
+let lastFocusBeforeSupport = null;
+
+function openSupport() {
+  supportPending = false;
+  lastFocusBeforeSupport = document.activeElement;
+  supportBackdrop.hidden = false;
+  document.getElementById("support-close").focus();
+}
+
+function closeSupport() {
+  supportBackdrop.hidden = true;
+  if (lastFocusBeforeSupport) lastFocusBeforeSupport.focus();
+}
+
+function wireSupportEvents() {
+  document.getElementById("support-x").addEventListener("click", closeSupport);
+  document.getElementById("support-close").addEventListener("click", closeSupport);
+  supportBackdrop.addEventListener("click", (e) => { if (e.target === supportBackdrop) closeSupport(); });
+
+  // Esc closes; Tab is trapped inside the dialog
+  supportBackdrop.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") { closeSupport(); return; }
+    if (e.key !== "Tab") return;
+    const focusables = [...supportBackdrop.querySelectorAll("button, a[href]")];
+    const first = focusables[0];
+    const last = focusables[focusables.length - 1];
+    if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+  });
+
+  setTimeout(() => {
+    if (modalBackdrop.hidden) openSupport();
+    else supportPending = true;
+  }, SUPPORT_DELAY_MS);
+}
+
+/* ==========================================================================
    Init
    ========================================================================== */
 function init() {
@@ -1193,6 +1262,7 @@ function init() {
   wireBoardEvents();
   wireFilterEvents();
   wireModalEvents();
+  wireSupportEvents();
   renderBoard();
 }
 
